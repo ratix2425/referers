@@ -2,6 +2,7 @@ import { UserId } from '@/modules/shared/kernel/UserId'
 
 export interface NetworkNode {
   userId: string
+  parentId: string | null
   depth: number
   email: string
   referralCode: string

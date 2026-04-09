@@ -46,6 +46,7 @@ export default async function DashboardPage() {
           </h2>
           <ReferralTreeView
             viewerEmail={viewer.email.value}
+            viewerId={viewer.id.value}
             nodes={nodes}
           />
         </div>

@@ -16,7 +16,7 @@ export class PostgresReferralTreeRepository implements IReferralTreeRepository {
 
   async findByUserId(userId: UserId): Promise<ReferralNode | null> {
     const { rows } = await this.pool.query(
-      'SELECT rt.user_id, rt.parent_id, ra.depth FROM referral_tree rt JOIN referral_ancestors ra ON ra.descendant_id = rt.user_id AND ra.ancestor_id = rt.user_id WHERE rt.user_id = $1',
+      'SELECT rt.user_id, rt.parent_id, MAX(ra.depth) AS depth FROM referral_tree rt JOIN referral_ancestors ra ON ra.descendant_id = rt.user_id WHERE rt.user_id = $1 GROUP BY rt.user_id, rt.parent_id',
       [userId.value]
     )
     if (!rows[0]) return null
@@ -87,18 +87,21 @@ export class PostgresReferralAncestorsRepository implements IReferralAncestorsRe
     const { rows } = await this.pool.query(
       `SELECT
          ra.descendant_id AS user_id,
+         rt.parent_id,
          ra.depth,
          u.email,
          u.referral_code,
-         (SELECT COUNT(*) FROM referral_tree rt WHERE rt.parent_id = ra.descendant_id) AS direct_children_count
+         (SELECT COUNT(*) FROM referral_tree rt2 WHERE rt2.parent_id = ra.descendant_id) AS direct_children_count
        FROM referral_ancestors ra
        JOIN users u ON u.id = ra.descendant_id
+       JOIN referral_tree rt ON rt.user_id = ra.descendant_id
        WHERE ra.ancestor_id = $1 AND ra.depth > 0
        ORDER BY ra.depth, u.created_at`,
       [userId.value]
     )
     return rows.map(r => ({
       userId: r.user_id,
+      parentId: r.parent_id ?? null,
       depth: r.depth,
       email: r.email,
       referralCode: r.referral_code,

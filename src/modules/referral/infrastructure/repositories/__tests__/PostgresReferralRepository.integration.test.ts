@@ -99,6 +99,24 @@ describe.skipIf(!DATABASE_URL)('PostgresReferralRepository (integration)', () =>
     expect(await ancestorsRepo.isDescendant(child.id, root.id)).toBe(false)
   })
 
+  it('findByUserId returns correct depth for level-2 node', async () => {
+    const root = await createUser()
+    const child = await createUser()
+    const grandchild = await createUser()
+
+    await treeRepo.insertNode(ReferralNode.create({ userId: root.id, parentId: null, depth: 0 }))
+    await ancestorsRepo.insertClosureForNewNode(root.id, null)
+    await treeRepo.insertNode(ReferralNode.create({ userId: child.id, parentId: root.id, depth: 1 }))
+    await ancestorsRepo.insertClosureForNewNode(child.id, root.id)
+    await treeRepo.insertNode(ReferralNode.create({ userId: grandchild.id, parentId: child.id, depth: 2 }))
+    await ancestorsRepo.insertClosureForNewNode(grandchild.id, child.id)
+
+    const node = await treeRepo.findByUserId(grandchild.id)
+    expect(node).not.toBeNull()
+    expect(node!.depth).toBe(2)
+    expect(node!.parentId?.value).toBe(child.id.value)
+  })
+
   it('getStatsByLevel returns correct counts', async () => {
     const root = await createUser()
     const child1 = await createUser()

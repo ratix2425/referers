@@ -8,6 +8,7 @@ const VISUAL_DEPTH_LIMIT = 15
 
 interface NetworkNode {
   userId: string
+  parentId: string | null
   email: string
   referralCode: string
   depth: number
@@ -23,32 +24,24 @@ interface TreeNode {
   __directChildrenCount?: number
 }
 
-function buildTree(viewerEmail: string, nodes: NetworkNode[]): TreeNode {
+function buildTree(viewerEmail: string, viewerId: string, nodes: NetworkNode[]): TreeNode {
   const root: TreeNode = {
     name: viewerEmail,
+    __userId: viewerId,
     __depth: 0,
     __directChildrenCount: 0,
     children: [],
   }
 
   const nodeMap = new Map<string, TreeNode>()
-  nodeMap.set('root', root)
+  nodeMap.set(viewerId, root)
 
-  // Group by depth to build top-down
-  const byDepth = new Map<number, NetworkNode[]>()
-  for (const n of nodes) {
-    const arr = byDepth.get(n.depth) ?? []
-    arr.push(n)
-    byDepth.set(n.depth, arr)
-  }
-
-  const depthsSorted = [...byDepth.keys()].sort((a, b) => a - b)
+  // First pass: create all TreeNodes
+  const depthsSorted = [...new Set(nodes.map(n => n.depth))].sort((a, b) => a - b)
 
   for (const depth of depthsSorted) {
     if (depth > VISUAL_DEPTH_LIMIT) continue
-    const nodesAtDepth = byDepth.get(depth)!
-
-    for (const node of nodesAtDepth) {
+    for (const node of nodes.filter(n => n.depth === depth)) {
       const treeNode: TreeNode = {
         name: node.email,
         __userId: node.userId,
@@ -60,23 +53,15 @@ function buildTree(viewerEmail: string, nodes: NetworkNode[]): TreeNode {
     }
   }
 
-  // Wire up parent-child (simple approach: nodes at depth d are children of nodes at depth d-1)
-  // We use the flat list and assign based on referralCode relationships from API
-  // For simplicity, we use depth ordering; proper wiring uses the parentId from API
-  for (const depth of depthsSorted) {
-    if (depth > VISUAL_DEPTH_LIMIT) continue
-    const nodesAtDepth = byDepth.get(depth)!
-    for (const node of nodesAtDepth) {
-      const treeNode = nodeMap.get(node.userId)
-      if (!treeNode) continue
-
-      // Find parent: look for node at depth-1
-      // Since we don't have parentId in this view, attach to root at depth 1,
-      // and let the tree render naturally by depth level
-      if (depth === 1) {
-        root.children!.push(treeNode)
-      }
-      // Deeper nodes are handled below via a separate pass
+  // Second pass: wire each node to its parent
+  for (const node of nodes) {
+    if (node.depth > VISUAL_DEPTH_LIMIT) continue
+    const treeNode = nodeMap.get(node.userId)
+    if (!treeNode) continue
+    const parentId = node.parentId ?? viewerId
+    const parentNode = nodeMap.get(parentId)
+    if (parentNode?.children) {
+      parentNode.children.push(treeNode)
     }
   }
 
@@ -85,6 +70,7 @@ function buildTree(viewerEmail: string, nodes: NetworkNode[]): TreeNode {
 
 interface ReferralTreeViewProps {
   viewerEmail: string
+  viewerId: string
   nodes: NetworkNode[]
 }
 
@@ -129,7 +115,7 @@ function CustomNode({
   )
 }
 
-export function ReferralTreeView({ viewerEmail, nodes }: ReferralTreeViewProps) {
+export function ReferralTreeView({ viewerEmail, viewerId, nodes }: ReferralTreeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 })
 
@@ -147,7 +133,7 @@ export function ReferralTreeView({ viewerEmail, nodes }: ReferralTreeViewProps) 
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  const treeData = useMemo(() => buildTree(viewerEmail, nodes), [viewerEmail, nodes])
+  const treeData = useMemo(() => buildTree(viewerEmail, viewerId, nodes), [viewerEmail, viewerId, nodes])
 
   if (nodes.length === 0) {
     return (

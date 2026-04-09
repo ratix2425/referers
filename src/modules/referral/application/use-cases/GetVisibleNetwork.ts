@@ -9,6 +9,7 @@ export interface GetVisibleNetworkInput {
 
 export interface NetworkTreeNode {
   userId: string
+  parentId: string | null
   email: string
   referralCode: string
   depth: number
@@ -27,6 +28,7 @@ export class GetVisibleNetwork {
     return Result.ok(
       nodes.map(n => ({
         userId: n.userId,
+        parentId: n.parentId,
         email: n.email,
         referralCode: n.referralCode,
         depth: n.depth,
